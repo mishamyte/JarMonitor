@@ -283,3 +283,6 @@ tempkey.jwk
 
 # JarMonitor data
 JarMonitor/data/
+
+# Claude Code
+.claude/settings.local.json

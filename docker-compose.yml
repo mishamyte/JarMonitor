@@ -1,0 +1,17 @@
+services:
+  jarmonitor:
+    image: ghcr.io/mishamyte/jarmonitor:latest
+    container_name: jarmonitor
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    environment:
+      - TZ=Europe/Kyiv
+      - Timezone=Europe/Kyiv
+      - ScheduleTime=23:59
+      # Jars (add more with Jars__1__, Jars__2__, etc.)
+      - Jars__0__Name=SAMPLE_NAME
+      - Jars__0__JarId=SAMPLE_JAR_ID
+      # Telegram
+      - Telegram__BotToken=BOT_TOKEN
+      - Telegram__ChannelId=CHANNEL_ID
