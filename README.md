@@ -149,6 +149,26 @@ History is stored in `data/history.json` relative to the working directory. Moun
 2. The URL will look like: `https://send.monobank.ua/jar/ABC123xyz`
 3. The jar ID is the last part: `ABC123xyz`
 
+## Development
+
+### Setup
+
+Restore local .NET tools (includes Fantomas for code formatting):
+
+```bash
+dotnet tool restore
+```
+
+### Code Formatting
+
+Format all F# files:
+
+```bash
+dotnet fantomas .
+```
+
+A pre-commit git hook is configured to automatically format staged files before committing.
+
 ## Tech Stack
 
 - **F#** / .NET 10
