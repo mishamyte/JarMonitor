@@ -79,13 +79,57 @@ Telegram__ChannelId=your-channel-id
 
 ## Docker
 
-### Build
+> **Note:** Pre-built images target **linux/arm64** architecture (Raspberry Pi, Apple Silicon, etc.). For x86_64/amd64, build the image locally.
+
+### Docker Compose (Recommended)
+
+Create a `docker-compose.yml`:
+
+```yaml
+services:
+  jarmonitor:
+    image: ghcr.io/mishamyte/jarmonitor:latest
+    container_name: jarmonitor
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    environment:
+      - TZ=Europe/Kyiv
+      - Timezone=Europe/Kyiv
+      - ScheduleTime=23:59
+      # Jars (add more with Jars__1__, Jars__2__, etc.)
+      - Jars__0__Name=My Jar
+      - Jars__0__JarId=ABC123xyz
+      # Telegram
+      - Telegram__BotToken=your-bot-token
+      - Telegram__ChannelId=your-channel-id
+```
+
+Run:
+
+```bash
+docker compose up -d
+```
+
+Check logs:
+
+```bash
+docker compose logs -f jarmonitor
+```
+
+### Using GitHub Container Registry
+
+```bash
+docker pull ghcr.io/mishamyte/jarmonitor:latest
+```
+
+### Build Locally
 
 ```bash
 docker build -t jarmonitor -f JarMonitor/Dockerfile .
 ```
 
-### Run
+### Run with Docker
 
 ```bash
 docker run -d \
@@ -93,12 +137,6 @@ docker run -d \
   -e Telegram__BotToken=your-bot-token \
   -e Telegram__ChannelId=your-channel-id \
   jarmonitor
-```
-
-### Using GitHub Container Registry
-
-```bash
-docker pull ghcr.io/mishamyte/jarmonitor:TAG
 ```
 
 ## Data Storage
