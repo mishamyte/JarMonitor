@@ -2,7 +2,6 @@
     "profiles": {
         "JarMonitor": {
             "commandName": "Project",
-            "commandLineArgs": "--run-now",
             "environmentVariables": {
                 "DOTNET_ENVIRONMENT": "Development"
             }
