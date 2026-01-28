@@ -284,5 +284,9 @@ tempkey.jwk
 # JarMonitor data
 JarMonitor/data/
 
+# Environment-specific config files (keep base appsettings.json tracked)
+appsettings.*.json
+!appsettings.json
+
 # Claude Code
 .claude/settings.local.json

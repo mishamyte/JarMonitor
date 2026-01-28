@@ -1,7 +1,6 @@
 module JarMonitor.Config
 
 open System
-open System.IO
 open Microsoft.Extensions.Configuration
 
 [<CLIMutable>]
@@ -19,15 +18,8 @@ type AppConfig =
         Telegram: TelegramConfig
     }
 
-let load () : Result<AppConfig, string> =
+let bindConfig (configuration: IConfiguration) : Result<AppConfig, string> =
     try
-        let configuration =
-            ConfigurationBuilder()
-                .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.json", optional = false)
-                .AddEnvironmentVariables()
-                .Build()
-
         let config =
             {
                 Timezone = configuration["Timezone"] |> Option.ofObj |> Option.defaultValue "UTC"

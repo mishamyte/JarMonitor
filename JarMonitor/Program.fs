@@ -2,11 +2,20 @@ module JarMonitor.Program
 
 open System
 open Cronos
+open Microsoft.Extensions.Configuration
+open Microsoft.Extensions.DependencyInjection
+open Microsoft.Extensions.Hosting
+open Microsoft.Extensions.Logging
+open Serilog
 
 [<Literal>]
 let DataPath = "data/history.json"
 
-let calculateNextRun (scheduleTime: string) (timezone: TimeZoneInfo) : DateTime =
+let calculateNextRun
+    (logger: Microsoft.Extensions.Logging.ILogger)
+    (scheduleTime: string)
+    (timezone: TimeZoneInfo)
+    : DateTime =
     try
         let parts = scheduleTime.Split(':')
         let hour = int parts[0]
@@ -22,12 +31,12 @@ let calculateNextRun (scheduleTime: string) (timezone: TimeZoneInfo) : DateTime 
         else
             nowUtc.AddDays(1.0)
     with ex ->
-        printfn $"Warning: Failed to parse schedule time '{scheduleTime}': {ex.Message}"
+        logger.LogWarning("Failed to parse schedule time '{ScheduleTime}': {Error}", scheduleTime, ex.Message)
         DateTime.UtcNow.AddDays(1.0)
 
-let runReport (config: Config.AppConfig) : Async<unit> =
+let runReport (logger: Microsoft.Extensions.Logging.ILogger) (config: Config.AppConfig) : Async<unit> =
     async {
-        printfn $"[{DateTime.UtcNow:u}] Starting report generation..."
+        logger.LogInformation("Starting report generation...")
 
         let timezone = Config.getTimeZone config
         let localNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timezone)
@@ -39,7 +48,7 @@ let runReport (config: Config.AppConfig) : Async<unit> =
             config.Jars
             |> Array.map (fun jarConfig ->
                 async {
-                    printfn $"  Fetching jar: {jarConfig.Name} ({jarConfig.JarId})"
+                    logger.LogInformation("Fetching jar: {JarName} ({JarId})", jarConfig.Name, jarConfig.JarId)
                     let! result = ApiClient.fetchJarData jarConfig.JarId
                     return (jarConfig, result)
                 })
@@ -62,72 +71,85 @@ let runReport (config: Config.AppConfig) : Async<unit> =
                     historyData <- DataStore.addRecord jarConfig.JarId jarConfig.Name record historyData
                     Some(jarConfig, response, yesterday)
                 | Error err ->
-                    printfn $"  Error fetching {jarConfig.Name}: {err}"
+                    logger.LogError("Error fetching {JarName}: {Error}", jarConfig.Name, err)
                     None)
             |> Array.toList
 
         if successfulJars.IsEmpty then
-            printfn "  No jar data available, skipping report"
+            logger.LogWarning("No jar data available, skipping report")
         else
             match DataStore.save DataPath historyData with
-            | Ok() -> printfn "  History saved"
-            | Error err -> printfn $"  Warning: Failed to save history: {err}"
+            | Ok() -> logger.LogInformation("History saved")
+            | Error err -> logger.LogWarning("Failed to save history: {Error}", err)
 
             let report = ReportGenerator.generate successfulJars localNow
 
-            printfn ""
-            printfn $"%s{ReportGenerator.formatConsole report}"
+            logger.LogInformation("Report generated:\n{Report}", ReportGenerator.formatConsole report)
 
             let chartPng = ChartGenerator.generateChart report.Jars
-            printfn $"  Generated chart: {chartPng.Length} bytes"
+            logger.LogInformation("Generated chart: {ChartSize} bytes", chartPng.Length)
 
             let telegramText = ReportGenerator.formatTelegram report
-            printfn "  Sending to Telegram..."
+            logger.LogInformation("Sending to Telegram...")
 
             let! sendResult =
                 TelegramNotifier.sendReport config.Telegram.BotToken config.Telegram.ChannelId telegramText chartPng
 
             match sendResult with
-            | Ok() -> printfn "  Report sent successfully!"
-            | Error err -> printfn $"  Failed to send report: {err}"
+            | Ok() -> logger.LogInformation("Report sent successfully!")
+            | Error err -> logger.LogError("Failed to send report: {Error}", err)
 
-        printfn $"[{DateTime.UtcNow:u}] Report generation complete"
+        logger.LogInformation("Report generation complete")
     }
 
-let run (runNow: bool) : Async<int> =
+let run (logger: Microsoft.Extensions.Logging.ILogger) (config: Config.AppConfig) (runNow: bool) : Async<int> =
     async {
-        printfn "JarMonitor starting..."
+        logger.LogInformation("JarMonitor starting...")
+        logger.LogInformation("Loaded {JarCount} jar(s)", config.Jars.Length)
+        logger.LogInformation("Schedule: {ScheduleTime}", config.ScheduleTime)
 
-        match Config.load () with
-        | Error err ->
-            printfn $"Error: {err}"
-            return 1
-        | Ok config ->
-            printfn $"  Loaded {config.Jars.Length} jar(s)"
-            printfn $"  Schedule: {config.ScheduleTime}"
+        if runNow then
+            do! runReport logger config
+            return 0
+        else
+            let timezone = Config.getTimeZone config
 
-            if runNow then
-                do! runReport config
-                return 0
-            else
-                let timezone = Config.getTimeZone config
+            while true do
+                let nextRun = calculateNextRun logger config.ScheduleTime timezone
+                let delay = nextRun - DateTime.UtcNow
 
-                while true do
-                    let nextRun = calculateNextRun config.ScheduleTime timezone
-                    let delay = nextRun - DateTime.UtcNow
+                if delay > TimeSpan.Zero then
+                    let localNext = TimeZoneInfo.ConvertTimeFromUtc(nextRun, timezone)
+                    logger.LogInformation("Next run scheduled for {NextRun:u} (in {Delay})", localNext, delay)
+                    do! Async.Sleep(int delay.TotalMilliseconds)
 
-                    if delay > TimeSpan.Zero then
-                        let localNext = TimeZoneInfo.ConvertTimeFromUtc(nextRun, timezone)
-                        printfn $"[{DateTime.UtcNow:u}] Next run scheduled for {localNext:u} (in {delay})"
-                        do! Async.Sleep(int delay.TotalMilliseconds)
+                do! runReport logger config
+                do! Async.Sleep(60000)
 
-                    do! runReport config
-                    do! Async.Sleep(60000)
-
-                return 0
+            return 0
     }
 
 [<EntryPoint>]
 let main args =
     let runNow = args |> Array.contains "--run-now"
-    Async.RunSynchronously(run runNow)
+
+    let builder = Host.CreateApplicationBuilder(args)
+
+    // Configure Serilog from configuration
+    Log.Logger <- LoggerConfiguration().ReadFrom.Configuration(builder.Configuration).CreateLogger()
+
+    // Clear default providers and use Serilog
+    builder.Logging.ClearProviders() |> ignore
+    builder.Services.AddSerilog() |> ignore
+
+    let host = builder.Build()
+
+    let configuration = host.Services.GetRequiredService<IConfiguration>()
+    let loggerFactory = host.Services.GetRequiredService<ILoggerFactory>()
+    let logger = loggerFactory.CreateLogger("JarMonitor")
+
+    match Config.bindConfig configuration with
+    | Error err ->
+        logger.LogError("Configuration error: {Error}", err)
+        1
+    | Ok config -> Async.RunSynchronously(run logger config runNow)
