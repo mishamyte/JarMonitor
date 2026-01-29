@@ -289,4 +289,4 @@ appsettings.*.json
 !appsettings.json
 
 # Claude Code
-.claude/settings.local.json
+.claude/
