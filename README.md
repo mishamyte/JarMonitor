@@ -12,6 +12,7 @@ A monitoring tool for Monobank jars (donation jars) that generates daily reports
 - **Scheduled Execution**: Runs automatically at a configured time using cron-style scheduling
 - **History Storage**: Keeps up to 90 days of historical data in JSON format
 - **Timezone Support**: Configurable timezone for scheduling and date display
+- **Structured Logging**: Serilog with console output and optional Grafana Loki integration
 
 ## Running Modes
 
@@ -39,6 +40,51 @@ Configuration is loaded from `appsettings.json` and can be overridden with envir
 
 ```json
 {
+    "Serilog": {
+        "Using": [
+            "Serilog.Sinks.Console",
+            "Serilog.Sinks.Grafana.Loki"
+        ],
+        "MinimumLevel": {
+            "Default": "Debug",
+            "Override": {
+                "Microsoft": "Warning",
+                "System": "Warning"
+            }
+        },
+        "WriteTo": [
+            {
+                "Name": "Console",
+                "Args": {
+                    "outputTemplate": "{Timestamp:dd-MM-yyyy HH:mm:ss} [{Level:u3}] {Message}{NewLine}{Exception}"
+                }
+            },
+            {
+                "Name": "GrafanaLoki",
+                "Args": {
+                    "uri": "[LOKI-URI]",
+                    "labels": [
+                        {
+                            "key": "app",
+                            "value": "jarmonitor"
+                        },
+                        {
+                            "key": "env",
+                            "value": "[ENV]"
+                        }
+                    ],
+                    "propertiesAsLabels": [
+                        "app",
+                        "env"
+                    ],
+                    "credentials": {
+                        "login": "[LOKI-LOGIN]",
+                        "password": "[LOKI-PASSWORD]"
+                    }
+                }
+            }
+        ]
+    },
     "Timezone": "Europe/Kyiv",
     "ScheduleTime": "23:59",
     "Jars": [
@@ -65,6 +111,8 @@ Configuration is loaded from `appsettings.json` and can be overridden with envir
 | `Jars[].JarId` | Monobank jar ID (from jar URL) | Required |
 | `Telegram.BotToken` | Telegram bot API token | Required |
 | `Telegram.ChannelId` | Telegram channel/chat ID to send reports | Required |
+| `Serilog` | Serilog logging configuration (see [Serilog.Settings.Configuration](https://github.com/serilog/serilog-settings-configuration)) | Console sink enabled |
+| `Serilog.WriteTo[].GrafanaLoki` | Optional Grafana Loki sink for centralized logging | Disabled (placeholder values) |
 
 ### Environment Variables
 
@@ -75,6 +123,9 @@ Timezone=Europe/Kyiv
 ScheduleTime=08:00
 Telegram__BotToken=your-bot-token
 Telegram__ChannelId=your-channel-id
+Serilog__WriteTo__1__Args__uri=https://your-loki-instance
+Serilog__WriteTo__1__Args__credentials__login=your-login
+Serilog__WriteTo__1__Args__credentials__password=your-password
 ```
 
 ## Docker
@@ -176,4 +227,6 @@ A pre-commit git hook is configured to automatically format staged files before 
 - **FsHttp** - HTTP client for API requests
 - **Funogram** - Telegram Bot API wrapper
 - **SkiaSharp** - Chart rendering (SVG to PNG)
+- **Serilog** - Structured logging with console and Grafana Loki sinks
+- **Microsoft.Extensions.Hosting** - Application hosting framework
 - **Svg.Skia** - SVG parsing and rendering
