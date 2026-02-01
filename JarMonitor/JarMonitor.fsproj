@@ -28,7 +28,7 @@
         <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
         <PackageReference Include="Serilog.Sinks.Grafana.Loki" Version="8.3.2" />
         <PackageReference Include="SkiaSharp" Version="3.119.1" />
-        <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.1" />
+        <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />
         <PackageReference Include="Svg.Skia" Version="3.4.1" />
     </ItemGroup>
 
